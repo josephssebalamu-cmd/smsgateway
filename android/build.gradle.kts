@@ -18,7 +18,7 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// 1. Inject namespace for plugins that lack one (fixes previous telephony error)
+// 1. Inject namespace for plugins that lack one
 subprojects {
     afterEvaluate {
         extensions.findByType<LibraryExtension>()?.apply {
@@ -29,34 +29,47 @@ subprojects {
     }
 }
 
-// 2. Force ALL subprojects (plugins) to use JVM 11 for Java & Kotlin
-// This must run in afterEvaluate to override the plugin's own settings.
+// 2. Force ALL subprojects to use JVM 17
 subprojects {
     afterEvaluate {
-        // Force Android plugins to use JVM 11
         if (plugins.hasPlugin("com.android.library") || plugins.hasPlugin("com.android.application")) {
             configure<BaseExtension> {
                 compileOptions {
-                    sourceCompatibility = JavaVersion.VERSION_11
-                    targetCompatibility = JavaVersion.VERSION_11
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
                 }
             }
         }
-        // Force Kotlin compilation to use JVM 11
         tasks.withType<KotlinCompile>().configureEach {
             compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_11)
+                jvmTarget.set(JvmTarget.JVM_17)
             }
         }
-        // Force Java compilation to use JVM 11 (for non-Android subprojects)
         tasks.withType<JavaCompile>().configureEach {
-            sourceCompatibility = "11"
-            targetCompatibility = "11"
+            sourceCompatibility = "17"
+            targetCompatibility = "17"
         }
     }
 }
 
-// 3. Evaluate app project last
+// 3. Auto-fix the telephony plugin's AndroidManifest.xml
+subprojects {
+    afterEvaluate {
+        if (name == "telephony") {
+            val manifestFile = file("src/main/AndroidManifest.xml")
+            if (manifestFile.exists()) {
+                val content = manifestFile.readText()
+                val newContent = content.replace(Regex("""package="[^"]*""""), "")
+                if (content != newContent) {
+                    manifestFile.writeText(newContent)
+                    println("✅ Auto-fixed telephony plugin AndroidManifest.xml")
+                }
+            }
+        }
+    }
+}
+
+// 4. Evaluate app project last
 subprojects {
     project.evaluationDependsOn(":app")
 }
