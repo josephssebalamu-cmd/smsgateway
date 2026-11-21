@@ -1,0 +1,76 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Build split-per-ABI release APK
+
+"on":
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: "${{ secrets.KEYSTORE_BASE64 }}"
+      KEYSTORE_PASSWORD: "${{ secrets.KEYSTORE_PASSWORD }}"
+      KEY_ALIAS: "${{ secrets.KEY_ALIAS }}"
+      KEY_PASSWORD: "${{ secrets.KEY_PASSWORD }}"
+      SUPABASE_URL: "${{ secrets.SUPABASE_URL }}"
+      SUPABASE_SERVICE_ROLE_KEY: "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate Supabase secrets
+        shell: bash
+        run: |
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo "::error::Configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in repository Actions secrets."
+            exit 1
+          fi
+
+      - name: Decode release keystore
+        if: env.KEYSTORE_BASE64 != ''
+        shell: bash
+        run: printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/keystore.jks
+
+      - name: Write Android release key properties
+        if: env.KEYSTORE_PASSWORD != ''
+        shell: bash
+        run: |
+          echo "storePassword=$KEYSTORE_PASSWORD" > android/key.properties
+          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
+          echo "storeFile=keystore.jks" >> android/key.properties
+
+      - name: Create local environment asset
+        shell: bash
+        run: |
+          echo "SUPABASE_URL=$SUPABASE_URL" > .env
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" >> .env
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build split-per-ABI APK
+        run: flutter build apk --release --split-per-abi --dart-define=SUPABASE_URL="$SUPABASE_URL" --dart-define=SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_ROLE_KEY"
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: fasbec-gateway-apks
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error

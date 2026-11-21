@@ -1,0 +1,189 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Scaffold Flutter gateway",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"create",
+				"--org",
+				"com.fasbec",
+				"--project-name",
+				"gateway",
+				"--platforms",
+				"android",
+				"."
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Locate Flutter and Git",
+			"type": "shell",
+			"command": "where",
+			"args": [
+				"flutter",
+				"git"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Scaffold Flutter gateway with Git",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Program Files\\Git\\cmd;C:\\Users\\baker\\dev\\flutter\\bin;%PATH%\" && flutter create --org com.fasbec --project-name gateway --platforms android ."
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Retry Flutter scaffold",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Program Files\\Git\\cmd;C:\\Users\\baker\\dev\\flutter\\bin;%PATH%\" && C:\\Users\\baker\\dev\\flutter\\bin\\flutter.bat create --org com.fasbec --project-name gateway --platforms android ."
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Initialize gateway repository",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Program Files\\Git\\cmd;%PATH%\" && git init && git add -A && git -c user.name=\"Copilot\" -c user.email=\"223556219+Copilot@users.noreply.github.com\" commit -m \"chore: scaffold gateway\""
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Add gateway dependencies",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && flutter pub add receive_sms telephony flutter_background supabase_flutter permission_handler shared_preferences flutter_dotenv"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify credentials and dependencies",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && git check-ignore .env && flutter pub get"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Format and analyze gateway",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && dart format lib android/app/src/main/kotlin/com/fasbec/gateway/MainActivity.kt supabase/migrations/001_init.sql && flutter analyze"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Analyze Flutter project",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && dart format lib && flutter analyze"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Build gateway Android APK",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && flutter build apk --debug --split-per-abi"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Inspect GitHub push readiness",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Program Files\\Git\\cmd;%PATH%\" && git remote -v && git status --short && git branch --show-current"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify secret ignore rules",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Program Files\\Git\\cmd;%PATH%\" && git check-ignore .env release.keystore && git remote -v"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Validate Flutter source",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && flutter analyze"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Verify Flutter code and tests",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && dart format lib test && flutter analyze && flutter test"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Run Flutter tests",
+			"type": "shell",
+			"command": "C:\\Windows\\System32\\cmd.exe",
+			"args": [
+				"/d",
+				"/c",
+				"set \"PATH=C:\\Users\\baker\\dev\\flutter\\bin;C:\\Program Files\\Git\\cmd;%PATH%\" && flutter test"
+			],
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
