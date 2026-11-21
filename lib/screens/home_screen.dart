@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,13 +17,35 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final PollingService _polling = PollingService();
   final SmsReceiverService _receiver = SmsReceiverService();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   String _activeSim = 'No SIM selected';
+  bool _connected = true;
 
   @override
   void initState() {
     super.initState();
     _loadActiveSim();
     _receiver.start();
+    _listenForConnectivity();
+  }
+
+  void _listenForConnectivity() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) async {
+      final connected =
+          results.isNotEmpty &&
+          !results.every((r) => r == ConnectivityResult.none);
+      if (!mounted) return;
+      setState(() => _connected = connected);
+      if (connected && !_polling.isPolling) {
+        await _polling.start();
+        if (mounted) setState(() {});
+      } else if (!connected && _polling.isPolling) {
+        await _polling.stop();
+        if (mounted) setState(() {});
+      }
+    });
   }
 
   Future<void> _loadActiveSim() async {
@@ -34,7 +59,18 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Gateway')),
+      appBar: AppBar(
+        title: const Text('Gateway'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Icon(
+              Icons.wifi,
+              color: _connected ? Colors.green : Colors.red,
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -77,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _receiver.stop();
     super.dispose();
   }

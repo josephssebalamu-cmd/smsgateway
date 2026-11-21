@@ -1,31 +1,35 @@
-import 'dart:async';
-
-import 'package:receive_sms/receive_sms.dart';
+import 'package:telephony/telephony.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../supabase_client.dart';
+import '../utils/app_logger.dart';
 import '../utils/command_parser.dart';
 import 'sim_service.dart';
 
 class SmsReceiverService {
-  StreamSubscription? _subscription;
-  final _receiveSms = ReceiveSms();
+  final Telephony _telephony = Telephony.instance;
+  final _uuid = const Uuid();
   bool _handling = false;
 
   Future<void> start() async {
-    if (_subscription != null) return;
-    _subscription = _receiveSms.incomingSmsStream.listen((message) {
-      if (_handling) return;
-      _handling = true;
-      _handleMessage(message.address, message.body).whenComplete(() {
-        _handling = false;
-      });
-    });
+    _telephony.listenIncomingSms(
+      onNewMessage: (SmsMessage message) {
+        if (_handling) return;
+        _handling = true;
+        _handleMessage(message.address ?? '', message.body ?? '').whenComplete(
+          () {
+            _handling = false;
+          },
+        );
+      },
+      listenInBackground: true,
+    );
+    AppLogger.instance.success('SMS receiver listening');
   }
 
   Future<void> stop() async {
-    await _subscription?.cancel();
-    _subscription = null;
+    // The telephony package manages its platform listener while this service exists.
   }
 
   String normalizePhone(String phone) {
@@ -47,14 +51,24 @@ class SmsReceiverService {
   Future<void> _handleMessage(String sender, String body) async {
     final normalizedSender = normalizePhone(sender);
     final subscriptionId = await _receivingSubscriptionId();
+    final sessionId = _uuid.v4();
 
     await GatewaySupabase.client.from('incoming_sms').insert({
       'sender': normalizedSender,
       'body': body,
       'subscription_id': subscriptionId,
+      'session_id': sessionId,
     });
+    AppLogger.instance.info(
+      'Inbound SMS: ${body.length > 60 ? '${body.substring(0, 60)}...' : body}',
+    );
 
     final parsed = CommandParser.parse(body);
+    if (parsed == null) {
+      AppLogger.instance.info('Inbound SMS ignored by SGW gatekeeper');
+      return;
+    }
+
     String reply;
 
     if (parsed is CommandError) {
@@ -152,13 +166,33 @@ class SmsReceiverService {
       reply = 'ERR Unknown command.';
     }
 
-    await GatewaySupabase.client.from('outbound_sms').insert({
-      'phone': normalizedSender,
-      'message': reply,
-      'status': 'pending',
-      'attempts': 0,
-      'reply_to_subscription_id': subscriptionId,
-      'kind': 'command_reply',
-    });
+    try {
+      await _telephony.sendSms(
+        to: normalizedSender,
+        message: reply,
+        isMultipart: reply.length > 160,
+      );
+      await GatewaySupabase.client.from('outbound_sms').insert({
+        'phone': normalizedSender,
+        'message': reply,
+        'status': 'sent',
+        'attempts': 0,
+        'session_id': sessionId,
+        'reply_to_subscription_id': subscriptionId,
+        'kind': 'command_reply',
+      });
+      AppLogger.instance.success('Instant reply sent');
+    } catch (error) {
+      await GatewaySupabase.client.from('outbound_sms').insert({
+        'phone': normalizedSender,
+        'message': reply,
+        'status': 'pending',
+        'attempts': 0,
+        'session_id': sessionId,
+        'reply_to_subscription_id': subscriptionId,
+        'kind': 'command_reply',
+      });
+      AppLogger.instance.error('Instant reply failed: $error');
+    }
   }
 }

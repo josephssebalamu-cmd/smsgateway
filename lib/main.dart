@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/messages_screen.dart';
+import 'screens/log_screen.dart';
 import 'screens/settings_screen.dart';
 import 'supabase_client.dart';
 
@@ -42,7 +43,12 @@ class GatewayShell extends StatefulWidget {
 class _GatewayShellState extends State<GatewayShell> {
   int _index = 0;
 
-  static const _screens = [HomeScreen(), MessagesScreen(), SettingsScreen()];
+  static const _screens = [
+    HomeScreen(),
+    MessagesScreen(),
+    LogScreen(),
+    SettingsScreen(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -55,12 +61,17 @@ class _GatewayShellState extends State<GatewayShell> {
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
             selectedIcon: Icon(Icons.dashboard),
-            label: 'Gateway',
+            label: 'Dashboard',
           ),
           NavigationDestination(
             icon: Icon(Icons.message_outlined),
             selectedIcon: Icon(Icons.message),
-            label: 'Messages',
+            label: 'Queue',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.article_outlined),
+            selectedIcon: Icon(Icons.article),
+            label: 'Logs',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),

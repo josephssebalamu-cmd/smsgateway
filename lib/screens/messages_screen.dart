@@ -104,6 +104,7 @@ class _MessageList extends StatelessWidget {
         separatorBuilder: (_, _) => const Divider(height: 1),
         itemBuilder: (context, index) {
           final row = rows[index];
+          final id = row['id']?.toString() ?? '';
           final title = outbound
               ? row['phone']?.toString() ?? ''
               : row['sender']?.toString() ?? '';
@@ -114,12 +115,45 @@ class _MessageList extends StatelessWidget {
               ? row['created_at']?.toString() ?? ''
               : row['created_at']?.toString() ?? '';
           final status = outbound ? row['status']?.toString() : null;
-          return ListTile(
-            title: Text(title),
-            subtitle: Text(
-              '$body\n$time${status == null ? '' : '\nStatus: $status'}',
+          final sessionId = row['session_id']?.toString();
+          final sessionSnippet = sessionId == null || sessionId.isEmpty
+              ? ''
+              : '\nSession: ${sessionId.length > 8 ? sessionId.substring(0, 8) : sessionId}';
+          return Dismissible(
+            key: ValueKey('sms-$id-$index'),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 16),
+              color: Colors.red,
+              child: const Icon(Icons.delete, color: Colors.white),
             ),
-            isThreeLine: true,
+            onDismissed: (_) async {
+              await GatewaySupabase.client
+                  .from(outbound ? 'outbound_sms' : 'incoming_sms')
+                  .delete()
+                  .eq('id', id);
+              await onRefresh();
+            },
+            child: ListTile(
+              title: Text(title),
+              subtitle: Text(
+                '$body\n$time${status == null ? '' : '\nStatus: $status'}$sessionSnippet',
+              ),
+              isThreeLine: true,
+              trailing: outbound && (status == 'failed' || status == 'pending')
+                  ? TextButton(
+                      onPressed: () async {
+                        await GatewaySupabase.client
+                            .from('outbound_sms')
+                            .update({'status': 'pending', 'attempts': 0})
+                            .eq('id', id);
+                        await onRefresh();
+                      },
+                      child: const Text('Retry'),
+                    )
+                  : null,
+            ),
           );
         },
       ),

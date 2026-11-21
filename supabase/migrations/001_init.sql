@@ -5,7 +5,7 @@ create table if not exists public.products (
   name text not null,
   description text,
   price numeric(10,2) not null default 0,
-  quantity int not null default 0,
+  quantity text not null default '1',
   sku text unique,
   created_by text,
   created_at timestamptz default now(),
@@ -20,6 +20,7 @@ create table if not exists public.incoming_sms (
   sender text not null,
   body text not null,
   subscription_id int,
+  session_id uuid,
   created_at timestamptz default now()
 );
 
@@ -34,6 +35,7 @@ create table if not exists public.outbound_sms (
   claimed_at timestamptz,
   sent_at timestamptz,
   reply_to_subscription_id int,
+  session_id uuid,
   kind text default 'command_reply'
 );
 

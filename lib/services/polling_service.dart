@@ -1,17 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter_background/flutter_background.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:telephony/telephony.dart';
 
 import '../supabase_client.dart';
-import 'sim_service.dart';
+import '../utils/app_logger.dart';
 
 class PollingService {
+  static final Set<String> _currentlySending = {};
   Timer? _timer;
   Duration _delay = const Duration(seconds: 15);
+  bool _isFetching = false;
   DateTime? lastPollTime;
   bool isPolling = false;
-  final SimService _simService = SimService();
+  final Telephony _telephony = Telephony.instance;
 
   Future<bool> start() async {
     if (isPolling) return true;
@@ -43,28 +45,29 @@ class PollingService {
   }
 
   Future<void> poll() async {
-    if (!isPolling) return;
+    if (!isPolling || _isFetching) return;
+    _isFetching = true;
     lastPollTime = DateTime.now();
     try {
       final rows = await GatewaySupabase.client.rpc(
         'claim_outbound_sms',
         params: {'batch_size': 5},
       );
-      final preferences = await SharedPreferences.getInstance();
-      final fallbackSubscriptionId = preferences.getInt('sim_subscription_id');
 
       for (final row in (rows as List).cast<Map<String, dynamic>>()) {
-        final subscriptionId =
-            row['reply_to_subscription_id'] as int? ?? fallbackSubscriptionId;
-        final attempts = row['attempts'] as int? ?? 1;
+        final id = row['id'].toString();
+        if (_currentlySending.contains(id)) continue;
+        _currentlySending.add(id);
+        final attempts = (row['attempts'] as num?)?.toInt() ?? 1;
 
         try {
-          await _simService.sendSms(
-            phone: row['phone'] as String,
+          await _telephony.sendSms(
+            to: row['phone'] as String,
             message: row['message'] as String,
-            subscriptionId: subscriptionId,
+            isMultipart: (row['message'] as String).length > 160,
           );
           await _onSendStatus(row, sent: true, attempts: attempts, error: null);
+          AppLogger.instance.success('Queued SMS sent: $id');
         } catch (error) {
           await _onSendStatus(
             row,
@@ -72,16 +75,22 @@ class PollingService {
             attempts: attempts,
             error: error.toString(),
           );
+          AppLogger.instance.error('Queued SMS failed: $error');
+        } finally {
+          _currentlySending.remove(id);
         }
       }
       _delay = const Duration(seconds: 15);
-    } catch (_) {
+    } catch (error) {
+      AppLogger.instance.error('Outbound poll failed: $error');
       _delay = Duration(
         seconds: _delay.inSeconds < 240
             ? (_delay.inSeconds * 2).clamp(30, 240)
             : 240,
       );
       _schedule();
+    } finally {
+      _isFetching = false;
     }
   }
 
