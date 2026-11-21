@@ -29,11 +29,14 @@ subprojects {
     }
 }
 
-// 2. Force ALL subprojects to use JVM 17
+// 2. Force ALL subprojects to use JVM 17 and compileSdk 37
 subprojects {
     afterEvaluate {
         if (plugins.hasPlugin("com.android.library") || plugins.hasPlugin("com.android.application")) {
-            configure<BaseExtension> {
+            extensions.findByType<BaseExtension>()?.apply {
+                // Force plugins to compile against API 37
+                compileSdkVersion(37) 
+                
                 compileOptions {
                     sourceCompatibility = JavaVersion.VERSION_17
                     targetCompatibility = JavaVersion.VERSION_17
