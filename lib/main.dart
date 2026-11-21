@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/messages_screen.dart';
 import 'screens/log_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/settings_screen.dart';
 import 'supabase_client.dart';
 
@@ -23,7 +24,7 @@ class GatewayApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Fasbec Gateway',
+      title: 'AgriMarket Gateway',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
@@ -44,6 +45,7 @@ class _GatewayShellState extends State<GatewayShell> {
   int _index = 0;
 
   static const _screens = [
+    DashboardScreen(),
     HomeScreen(),
     MessagesScreen(),
     LogScreen(),
@@ -53,7 +55,7 @@ class _GatewayShellState extends State<GatewayShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_index],
+      body: IndexedStack(index: _index, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (index) => setState(() => _index = index),
@@ -64,9 +66,14 @@ class _GatewayShellState extends State<GatewayShell> {
             label: 'Dashboard',
           ),
           NavigationDestination(
+            icon: Icon(Icons.sms_outlined),
+            selectedIcon: Icon(Icons.sms),
+            label: 'Gateway',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.message_outlined),
             selectedIcon: Icon(Icons.message),
-            label: 'Queue',
+            label: 'Market',
           ),
           NavigationDestination(
             icon: Icon(Icons.article_outlined),

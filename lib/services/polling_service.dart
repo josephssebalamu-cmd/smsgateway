@@ -23,8 +23,14 @@ class PollingService {
         notificationText: 'SMS gateway is polling for outbound messages',
       ),
     );
-    if (!initialized) return false;
-    if (!await FlutterBackground.enableBackgroundExecution()) return false;
+    if (!initialized) {
+      AppLogger.instance.error('Could not initialize the polling service');
+      return false;
+    }
+    if (!await FlutterBackground.enableBackgroundExecution()) {
+      AppLogger.instance.error('Could not enable background polling');
+      return false;
+    }
     isPolling = true;
     _delay = const Duration(seconds: 15);
     await poll();

@@ -1,35 +1,43 @@
-import 'package:telephony/telephony.dart';
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:telephony/telephony.dart';
 import 'package:uuid/uuid.dart';
 
 import '../supabase_client.dart';
 import '../utils/app_logger.dart';
-import '../utils/command_parser.dart';
 import 'sim_service.dart';
+import 'ussd_engine.dart';
+
+@pragma('vm:entry-point')
+Future<void> handleBackgroundSms(SmsMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await GatewaySupabase.initialize();
+  await SmsReceiverService().handleMessage(
+    message.address ?? '',
+    message.body ?? '',
+  );
+}
 
 class SmsReceiverService {
+  static bool _isListening = false;
+
   final Telephony _telephony = Telephony.instance;
+  final UssdEngine _engine = UssdEngine();
   final _uuid = const Uuid();
-  bool _handling = false;
 
   Future<void> start() async {
+    if (_isListening) return;
     _telephony.listenIncomingSms(
       onNewMessage: (SmsMessage message) {
-        if (_handling) return;
-        _handling = true;
-        _handleMessage(message.address ?? '', message.body ?? '').whenComplete(
-          () {
-            _handling = false;
-          },
-        );
+        unawaited(handleMessage(message.address ?? '', message.body ?? ''));
       },
+      onBackgroundMessage: handleBackgroundSms,
       listenInBackground: true,
     );
-    AppLogger.instance.success('SMS receiver listening');
-  }
-
-  Future<void> stop() async {
-    // The telephony package manages its platform listener while this service exists.
+    _isListening = true;
+    AppLogger.instance.success('AgriMarket SMS receiver listening');
   }
 
   String normalizePhone(String phone) {
@@ -48,151 +56,84 @@ class SmsReceiverService {
     return slots.isEmpty ? null : slots.first.subscriptionId;
   }
 
-  Future<void> _handleMessage(String sender, String body) async {
+  Future<void> handleMessage(String sender, String body) async {
     final normalizedSender = normalizePhone(sender);
-    final subscriptionId = await _receivingSubscriptionId();
     final sessionId = _uuid.v4();
+    int? subscriptionId;
 
-    await GatewaySupabase.client.from('incoming_sms').insert({
-      'sender': normalizedSender,
-      'body': body,
-      'subscription_id': subscriptionId,
-      'session_id': sessionId,
-    });
+    try {
+      subscriptionId = await _receivingSubscriptionId();
+    } catch (error) {
+      AppLogger.instance.error('Could not read SMS subscription: $error');
+    }
+
+    try {
+      await GatewaySupabase.client.from('incoming_sms').insert({
+        'sender': normalizedSender,
+        'body': body,
+        'subscription_id': subscriptionId,
+        'session_id': sessionId,
+      });
+    } catch (error) {
+      AppLogger.instance.error('Could not log inbound SMS: $error');
+    }
+
     AppLogger.instance.info(
-      'Inbound SMS: ${body.length > 60 ? '${body.substring(0, 60)}...' : body}',
+      'Inbound SMS from $normalizedSender: ${body.length > 60 ? '${body.substring(0, 60)}...' : body}',
     );
 
-    final parsed = CommandParser.parse(body);
-    if (parsed == null) {
-      AppLogger.instance.info('Inbound SMS ignored by SGW gatekeeper');
-      return;
-    }
-
-    String reply;
-
-    if (parsed is CommandError) {
-      reply = parsed.text;
-    } else if (parsed is ParsedCommand) {
+    final isTrigger = body.trim().toUpperCase() == 'SGW';
+    String? reply;
+    if (!isTrigger) {
       try {
-        switch (parsed.verb) {
-          case 'ADD':
-            final inserted = await GatewaySupabase.client
-                .from('products')
-                .insert({
-                  'name': parsed.argument,
-                  'price': double.parse(parsed.price!),
-                  'quantity': parsed.quantity,
-                  'created_by': normalizedSender,
-                })
-                .select('id')
-                .single();
-            final id = inserted['id'].toString();
-            reply = 'OK #${id.replaceAll('-', '').substring(0, 6)} added';
-            break;
-          case 'SEARCH':
-            final rows = await GatewaySupabase.client.rpc(
-              'search_products',
-              params: {'q': parsed.argument},
-            );
-            final products = (rows as List).cast<Map<String, dynamic>>();
-            if (products.isEmpty) {
-              reply = 'No products found.';
-            } else {
-              reply = products
-                  .map((product) {
-                    final id = product['id'].toString();
-                    final shortId = id.replaceAll('-', '').substring(0, 6);
-                    return '#$shortId ${product['name']} | ${product['price']} | qty ${product['quantity']}';
-                  })
-                  .join('\n');
-            }
-            break;
-          case 'LIST':
-            final rows = await GatewaySupabase.client
-                .from('products')
-                .select('id,name,price,quantity')
-                .order('created_at', ascending: false)
-                .limit(5);
-            final products = rows.cast<Map<String, dynamic>>();
-            if (products.isEmpty) {
-              reply = 'No products.';
-            } else {
-              reply = products
-                  .map((product) {
-                    final id = product['id'].toString();
-                    final shortId = id.replaceAll('-', '').substring(0, 6);
-                    return '#$shortId ${product['name']} | ${product['price']} | qty ${product['quantity']}';
-                  })
-                  .join('\n');
-            }
-            break;
-          case 'DELETE':
-            final prefix = parsed.argument.replaceAll('-', '').toLowerCase();
-            final rows = await GatewaySupabase.client
-                .from('products')
-                .select('id,name');
-            final matches = rows.cast<Map<String, dynamic>>().where((product) {
-              final id = product['id']
-                  .toString()
-                  .replaceAll('-', '')
-                  .toLowerCase();
-              return id.startsWith(prefix);
-            }).toList();
-            if (matches.isEmpty) {
-              reply = 'ERR Product not found.';
-            } else if (matches.length != 1) {
-              reply = 'ERR Product prefix is ambiguous.';
-            } else {
-              await GatewaySupabase.client
-                  .from('products')
-                  .delete()
-                  .eq('id', matches.first['id']);
-              reply =
-                  'OK #${prefix.substring(0, prefix.length < 6 ? prefix.length : 6)} deleted';
-            }
-            break;
-          case 'HELP':
-            reply =
-                'ADD name | price | qty\nSEARCH query\nLIST\nDELETE uuid-prefix\nHELP';
-            break;
-          default:
-            reply = 'ERR Unknown command.';
+        if (!await _engine.hasActiveSession(normalizedSender)) {
+          AppLogger.instance.info(
+            'SMS ignored; sender has no AgriMarket session',
+          );
+          return;
         }
-      } catch (_) {
-        reply = 'ERR Could not execute command.';
+      } catch (error) {
+        AppLogger.instance.error('Could not check AgriMarket session: $error');
+        return;
       }
-    } else {
-      reply = 'ERR Unknown command.';
     }
 
+    try {
+      reply = await _engine.process(normalizedSender, body);
+    } catch (error) {
+      AppLogger.instance.error('Could not process marketplace SMS: $error');
+      reply = 'Sorry, we could not process your request. Please try again.';
+    }
+
+    if (reply == null) return;
+
+    var status = 'sent';
+    String? sendError;
     try {
       await _telephony.sendSms(
         to: normalizedSender,
         message: reply,
         isMultipart: reply.length > 160,
       );
-      await GatewaySupabase.client.from('outbound_sms').insert({
-        'phone': normalizedSender,
-        'message': reply,
-        'status': 'sent',
-        'attempts': 0,
-        'session_id': sessionId,
-        'reply_to_subscription_id': subscriptionId,
-        'kind': 'command_reply',
-      });
-      AppLogger.instance.success('Instant reply sent');
+      AppLogger.instance.success('Instant AgriMarket reply sent');
     } catch (error) {
+      status = 'pending';
+      sendError = error.toString();
+      AppLogger.instance.error('Instant SMS send failed: $error');
+    }
+
+    try {
       await GatewaySupabase.client.from('outbound_sms').insert({
         'phone': normalizedSender,
         'message': reply,
-        'status': 'pending',
+        'status': status,
         'attempts': 0,
+        'last_error': sendError,
         'session_id': sessionId,
         'reply_to_subscription_id': subscriptionId,
-        'kind': 'command_reply',
       });
-      AppLogger.instance.error('Instant reply failed: $error');
+    } catch (error) {
+      AppLogger.instance.error('Could not log outbound SMS: $error');
     }
   }
 }
