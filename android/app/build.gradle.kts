@@ -31,6 +31,10 @@ android {
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
+                
+                // 👇 THE FIX FOR ANDROID 6.0.1 (VIVO Y66) 👇
+                enableV1Signing = true
+                enableV2Signing = true
             }
         }
     }
